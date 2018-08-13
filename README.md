@@ -1,27 +1,99 @@
-# BugApp
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 6.1.3.
+## I'm submitting a... 
+<pre><code>[x ] Bug report </code></pre>
 
-## Development server
+## The situation in a nutshell
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+I will briefly describe what my example does. **This breaks in testing environment, but runs fine in normal environment. That is the bug report.**
 
-## Code scaffolding
+1. We define a template in the `ng-template` tag as done in `AComponent` below
+```javascript
+@Component({
+    selector: 'app-a',
+    template: `
+  <ng-template #my-template let-context>
+  I am loaded dynamically
+  {{context}}
+  {{"me "+(1+1)+"!!"}}
+  Bye bye
+  </ng-template>
+  `
+})
+class AComponent extends TemplateExtractor {}
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+```
 
-## Build
+2. TemplateExtractor exposes the `TemplateRef`, the one referenced as `my-template`, via a method `getTemplateRef()` on the component.
+3. Elsewhere we have a different component that contains `<ng-container appAnchor></ng-container>` in its template. In `AnchorDirective` we get a hold of the `ViewContainerRef` of the ng-container.
+4. In `AnchorDirective` we also create (and immediately destroy) an instance of `AComponent` and we extract the templateRef `my-template` from it.
+5. We do  `this.vc.createEmbeddedView(templateRef, { $implicit: 'blabla' })`  (where vc is the `ng-container` and template is `my-template`.
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `--prod` flag for a production build.
+Result:
 
-## Running unit tests
+## Current behavior
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+In normal application mode (`ng serve`), it produces the following HTML (as expected)
+produces the following HTML
+```html
+<div>
+    <p>outer div test</p>
+    <!---->
+    I am loaded dynamically I am interpolated me 2!! Bye bye 
+</div>
+```
+However, when testing (`ng test`), the interpolation (`{{ .. }}`) breaks the rendering.
+```html
+<div>
+    <p>outer div test</p>
+    <!---->
+    I am loaded dynamically 
+</div>
+```
 
-## Running end-to-end tests
+## Expected behavior
+We would expect for (`ng test`) and (`ng serve`) the same HTML
+```html
+<div>
+    <p>outer div test</p>
+    <!---->
+    I am loaded dynamically I am interpolated me 2!! Bye bye 
+</div>
+```
 
-Run `ng e2e` to execute the end-to-end tests via [Protractor](http://www.protractortest.org/).
 
-## Further help
+The `spec.ts` file is
+```javascript
+describe('Directive: TableEditorCellDirective', () => {
+let fixture: ComponentFixture<AppComponent>;
+beforeAll(() => {
+  TestBed.resetTestEnvironment();
+  TestBed.initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting());
+});
+beforeEach(() => {
+  TestBed.configureTestingModule({
+    imports: [AppModule]
+  });
+  fixture = TestBed.createComponent(AppComponent);
+  fixture.detectChanges();
+});
+describe('dummy test', () => {
+  it('dummy test ', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+  }));
+});
+});
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI README](https://github.com/angular/angular-cli/blob/master/README.md).
+```
+
+## Minimal reproduction of the problem with instructions
+I couldn't get the test environment example to work in plunkr :( 
+Here is a standalone repo, I hope it is sufficient: https://github.com/maurei/angular-bug-report
+
+## What is the motivation / use case for changing the behavior?
+I was writing test for a library that I'm writing (I'm porting [angular-table-editor](https://maurei.github.io/angular-table-editor/#!/) to angular 6)
+
+## Environment
+Angular version: 6.1.0
+Chrome (desktop) version 68.0.3440.106
+
